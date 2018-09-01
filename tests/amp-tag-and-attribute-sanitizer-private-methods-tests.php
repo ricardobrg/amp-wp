@@ -1,5 +1,7 @@
 <?php
 // phpcs:disable WordPress.Arrays.MultipleStatementAlignment.DoubleArrowNotAligned
+// phpcs:disable WordPress.PHP.DevelopmentFunctions.error_log_var_dump
+// phpcs:disable WordPress.XSS.EscapeOutput.OutputNotEscaped
 
 class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCase {
 
@@ -8,9 +10,9 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 	protected $layout_allowed_attrs;
 
 	public function setUp() {
-		$this->allowed_tags = AMP_Allowed_Tags_Generated::get_allowed_tags();
-		$this->globally_allowed_attributes = AMP_Allowed_Tags_Generated::get_allowed_attributes();
-		$this->layout_allowed_attributes = AMP_Allowed_Tags_Generated::get_allowed_attributes();
+		$this->allowed_tags           = AMP_Allowed_Tags_Generated::get_allowed_tags();
+		$this->globally_allowed_attrs = AMP_Allowed_Tags_Generated::get_allowed_attributes();
+		$this->layout_allowed_attrs   = AMP_Allowed_Tags_Generated::get_layout_attributes();
 	}
 
 	public function get_attr_spec_rule_data() {
@@ -166,7 +168,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'attribute_value' => '_blank',
 					'include_attr' => true,
 					'include_attr_value' => true,
-					'func_name' => 'check_attr_spec_rule_value_regex',
+					'func_name' => 'check_attr_spec_rule_value',
 				),
 				'expected' => AMP_Rule_Spec::PASS,
 			),
@@ -178,7 +180,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'attribute_value' => '_blankzzz',
 					'include_attr' => true,
 					'include_attr_value' => true,
-					'func_name' => 'check_attr_spec_rule_value_regex',
+					'func_name' => 'check_attr_spec_rule_value',
 				),
 				'expected' => AMP_Rule_Spec::FAIL,
 			),
@@ -205,7 +207,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'attribute_value' => 'false',
 					'include_attr' => true,
 					'include_attr_value' => true,
-					'func_name' => 'check_attr_spec_rule_value_regex_casei',
+					'func_name' => 'check_attr_spec_rule_value_casei',
 				),
 				'expected' => AMP_Rule_Spec::PASS,
 			),
@@ -217,7 +219,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'attribute_value' => 'FALSE',
 					'include_attr' => true,
 					'include_attr_value' => true,
-					'func_name' => 'check_attr_spec_rule_value_regex_casei',
+					'func_name' => 'check_attr_spec_rule_value_casei',
 				),
 				'expected' => AMP_Rule_Spec::PASS,
 			),
@@ -229,7 +231,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'attribute_value' => 'invalid',
 					'include_attr' => true,
 					'include_attr_value' => true,
-					'func_name' => 'check_attr_spec_rule_value_regex_casei',
+					'func_name' => 'check_attr_spec_rule_value_casei',
 				),
 				'expected' => AMP_Rule_Spec::FAIL,
 			),
@@ -546,10 +548,13 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 		}
 		$source = '<' . $data['tag_name'] . ' ' . $attribute . '>Some test content</' . $data['tag_name'] . '>';
 
-		$attr_spec_list = $this->allowed_tags[ $data['tag_name'] ][$data['rule_spec_index']]['attr_spec_list'];
-		foreach( $attr_spec_list as $attr_name => $attr_val ) {
-			if ( isset( $attr_spec_list[ $attr_name ][AMP_Rule_Spec::ALTERNATIVE_NAMES] ) ) {
-				foreach( $attr_spec_list[ $attr_name ][AMP_Rule_Spec::ALTERNATIVE_NAMES] as $attr_alt_name ) {
+		$attr_spec_list = $this->allowed_tags[ $data['tag_name'] ][ $data['rule_spec_index'] ]['attr_spec_list'];
+		if ( isset( $this->allowed_tags[ $data['tag_name'] ][ $data['rule_spec_index'] ]['tag_spec']['amp_layout'] ) ) {
+			$attr_spec_list = array_merge( $attr_spec_list, $this->layout_allowed_attrs );
+		}
+		foreach ( $attr_spec_list as $attr_name => $attr_val ) {
+			if ( isset( $attr_spec_list[ $attr_name ][ AMP_Rule_Spec::ALTERNATIVE_NAMES ] ) ) {
+				foreach ( $attr_spec_list[ $attr_name ][ AMP_Rule_Spec::ALTERNATIVE_NAMES ] as $attr_alt_name ) {
 					$attr_spec_list[ $attr_alt_name ] = $attr_spec_list[ $attr_name ];
 				}
 			}
@@ -790,7 +795,12 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 		$this->assertEquals( $expected, $got, sprintf( "using source: %s\n%s", $data['source'], wp_json_encode( $data ) ) );
 	}
 
-	public function get_ancestor_with_tag_name_data() {
+	/**
+	 * Get data for testing get_ancestor_with_matching_spec_name.
+	 *
+	 * @return array Data.
+	 */
+	public function get_ancestor_with_matching_spec_name_data() {
 		return array(
 			'empty' => array(
 				array(
@@ -798,7 +808,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'node_tag_name' => 'p',
 					'ancestor_tag_name' => 'article',
 				),
-				null
+				null,
 			),
 			'ancestor_is_immediate_parent' => array(
 				array(
@@ -806,7 +816,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'node_tag_name' => 'p',
 					'ancestor_tag_name' => 'article',
 				),
-				'article'
+				'article',
 			),
 			'ancestor_is_distant_parent' => array(
 				array(
@@ -814,7 +824,15 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'node_tag_name' => 'p',
 					'ancestor_tag_name' => 'article',
 				),
-				'article'
+				'article',
+			),
+			'ancestor_has_attributes' => array(
+				array(
+					'source' => '<form method="post"><div><div><div><p>Good Data</p></div></div></div><article>',
+					'node_tag_name' => 'p',
+					'ancestor_tag_name' => 'form [method=post]',
+				),
+				'form',
 			),
 			'ancestor_does_not_exist' => array(
 				array(
@@ -822,26 +840,32 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'node_tag_name' => 'p',
 					'ancestor_tag_name' => 'article',
 				),
-				null
+				null,
 			),
 		);
 	}
 
 	/**
-	 * @dataProvider get_ancestor_with_tag_name_data
+	 * Test get_ancestor_with_matching_spec_name.
+	 *
+	 * @dataProvider get_ancestor_with_matching_spec_name_data
 	 * @group allowed-tags-private-methods
+	 * @covers AMP_Tag_And_Attribute_Sanitizer::get_ancestor_with_matching_spec_name()
+	 *
+	 * @param array  $data     Data.
+	 * @param string $expected Expected.
 	 */
-	public function test_get_ancestor_with_tag_name( $data, $expected ) {
-		$dom = AMP_DOM_Utils::get_dom_from_content( $data['source'] );
+	public function test_get_ancestor_with_matching_spec_name( $data, $expected ) {
+		$dom       = AMP_DOM_Utils::get_dom_from_content( $data['source'] );
 		$sanitizer = new AMP_Tag_And_Attribute_Sanitizer( $dom );
-		$node = $dom->getElementsByTagName( $data['node_tag_name'] )->item( 0 );
+		$node      = $dom->getElementsByTagName( $data['node_tag_name'] )->item( 0 );
 		if ( $expected ) {
 			$ancestor_node = $dom->getElementsByTagName( $expected )->item( 0 );
 		} else {
 			$ancestor_node = null;
 		}
 
-		$got = $this->invoke_method( $sanitizer, 'get_ancestor_with_tag_name', array( $node, $data['ancestor_tag_name'] ) );
+		$got = $this->invoke_method( $sanitizer, 'get_ancestor_with_matching_spec_name', array( $node, $data['ancestor_tag_name'] ) );
 
 		$this->assertEquals( $ancestor_node, $got, sprintf( "using source: %s\n%s", $data['source'], wp_json_encode( $data ) ) );
 	}
@@ -1423,7 +1447,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'attr_name'      => 'attribute1',
 					'attr_spec_rule' => array(
 						'value_url' => array(
-							'allowed_protocol' => array(
+							'protocol' => array(
 								'http',
 								'https',
 							),
@@ -1439,7 +1463,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'attr_name'      => 'attribute1',
 					'attr_spec_rule' => array(
 						'value_url' => array(
-							'allowed_protocol' => array(
+							'protocol' => array(
 								'http',
 								'https',
 							),
@@ -1455,7 +1479,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'attr_name'      => 'attribute1',
 					'attr_spec_rule' => array(
 						'value_url' => array(
-							'allowed_protocol' => array(
+							'protocol' => array(
 								'http',
 								'https',
 							),
@@ -1471,7 +1495,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 					'attr_name'      => 'attribute1',
 					'attr_spec_rule' => array(
 						'value_url' => array(
-							'allowed_protocol' => array(
+							'protocol' => array(
 								'http',
 								'https',
 							),
@@ -1490,7 +1514,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 							'attribute1_alternative1',
 						),
 						'value_url'         => array(
-							'allowed_protocol' => array(
+							'protocol' => array(
 								'http',
 								'https',
 							),
@@ -1509,7 +1533,7 @@ class AMP_Tag_And_Attribute_Sanitizer_Attr_Spec_Rules_Test extends WP_UnitTestCa
 							'attribute1_alternative1',
 						),
 						'value_url'         => array(
-							'allowed_protocol' => array(
+							'protocol' => array(
 								'http',
 								'https',
 							),

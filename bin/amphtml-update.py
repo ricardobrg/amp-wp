@@ -2,24 +2,14 @@
 This script is used to generate the 'class-amp-allowed-tags-generated.php'
 file that is used by the class AMP_Tag_And_Attribute_Sanitizer.
 
-Follow the steps below to generate a new version of the allowed tags class:
+A bash script, amphtml-update.sh, is provided to automatically run this script.  To run the bash script, type:
 
-- Download a copy of the latet AMPHTML repository from github:
+`bash amphtml-update.sh`
 
-	git clone git@github.com:ampproject/amphtml.git
+from within a Linux environment such as VVV.
 
-- Copy this file into the repo's validator subdirectory:
-
-	cp amp_wp_build.py amphtml/validator
-
-- Run the file from the validator subdirectory:
-	cd amphtml/validator;python amp_wp_build.py
-
-- The class-amp-allowed-tags-generated.php will be generated at:
-	amphtml/validator/amp_wp/class-amp-allowed-tags-generated.php
-
-- copy this file into the amp-wp plugin:
-	cp amp_wp/class-amp-allowed-tags-generated.php /path/to/wordpress/wp-content/plugins/amp-wp/includes/sanitizers/
+See the Updating Allowed Tags and Attributes section of the Contributing guide
+https://github.com/Automattic/amp-wp/blob/develop/contributing.md#updating-allowed-tags-and-attributes.
 
 Then have fun sanitizing your AMP posts!
 """
@@ -356,12 +346,37 @@ def GetTagSpec(tag_spec, attr_lists):
 		for (field_descriptor, field_value) in tag_spec.cdata.ListFields():
 			if isinstance(field_value, (unicode, str, bool, int)):
 				cdata_dict[ field_descriptor.name ] = field_value
-			else:
-				if hasattr( field_value, '_values' ):
-					cdata_dict[ field_descriptor.name ] = {}
-					for _value in field_value._values:
-						for (key,val) in _value.ListFields():
-							cdata_dict[ field_descriptor.name ][ key.name ] = val
+			elif hasattr( field_value, '_values' ):
+				cdata_dict[ field_descriptor.name ] = {}
+				for _value in field_value._values:
+					for (key,val) in _value.ListFields():
+						cdata_dict[ field_descriptor.name ][ key.name ] = val
+			elif 'css_spec' == field_descriptor.name:
+				css_spec = {}
+
+				css_spec['allowed_at_rules'] = []
+				for at_rule_spec in field_value.at_rule_spec:
+					if '$DEFAULT' == at_rule_spec.name:
+						continue
+					css_spec['allowed_at_rules'].append( at_rule_spec.name )
+
+				for css_spec_field_name in ( 'allowed_declarations', 'declaration', 'font_url_spec', 'image_url_spec', 'validate_keyframes' ):
+					if not hasattr( field_value, css_spec_field_name ):
+						continue
+					css_spec_field_value = getattr( field_value, css_spec_field_name )
+					if isinstance(css_spec_field_value, (list, collections.Sequence, google.protobuf.internal.containers.RepeatedScalarFieldContainer)):
+						css_spec[ css_spec_field_name ] = [ val for val in css_spec_field_value ]
+					elif hasattr( css_spec_field_value, 'ListFields' ):
+						css_spec[ css_spec_field_name ] = {}
+						for (css_spec_field_item_descriptor, css_spec_field_item_value) in getattr( field_value, css_spec_field_name ).ListFields():
+							if isinstance(css_spec_field_item_value, (list, collections.Sequence, google.protobuf.internal.containers.RepeatedScalarFieldContainer)):
+								css_spec[ css_spec_field_name ][ css_spec_field_item_descriptor.name ] = [ val for val in css_spec_field_item_value ]
+							else:
+								css_spec[ css_spec_field_name ][ css_spec_field_item_descriptor.name ] = css_spec_field_item_value
+					else:
+						css_spec[ css_spec_field_name ] = css_spec_field_value
+
+				cdata_dict['css_spec'] = css_spec
 		if len( cdata_dict ) > 0:
 			tag_spec_dict['cdata'] = cdata_dict
 
@@ -444,6 +459,15 @@ def GetTagRules(tag_spec):
 	if tag_spec.HasField('unique_warning'):
 		tag_rules['unique_warning'] = tag_spec.unique_warning
 
+	if tag_spec.HasField('amp_layout'):
+		amp_layout = {}
+		for field in tag_spec.amp_layout.ListFields():
+			if 'supported_layouts' == field[0].name:
+				amp_layout['supported_layouts'] = [ val for val in field[1] ]
+			else:
+				amp_layout[ field[0].name ] = field[1]
+		tag_rules['amp_layout'] = amp_layout
+
 	logging.info('... done')
 	return tag_rules
 
@@ -488,12 +512,12 @@ def GetValues(attr_spec):
 		value_dict['mandatory'] = attr_spec.mandatory
 
 	# Add allowed value
-	if attr_spec.HasField('value'):
-		value_dict['value'] = attr_spec.value
+	if attr_spec.value:
+		value_dict['value'] = list( attr_spec.value )
 
 	# value_casei
-	if attr_spec.HasField('value_casei'):
-		value_dict['value_casei'] = attr_spec.value_casei
+	if attr_spec.value_casei:
+		value_dict['value_casei'] = list( attr_spec.value_casei )
 
 	# value_regex
 	if attr_spec.HasField('value_regex'):

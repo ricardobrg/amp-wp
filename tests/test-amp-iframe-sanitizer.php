@@ -50,12 +50,17 @@ class AMP_Iframe_Converter_Test extends WP_UnitTestCase {
 
 			'iframe_with_blacklisted_attribute' => array(
 				'<iframe src="https://example.com/embed/132886713" width="500" height="281" scrolling="auto"></iframe>',
-				'<amp-iframe src="https://example.com/embed/132886713" width="500" height="281" sandbox="allow-scripts allow-same-origin" layout="intrinsic" class="amp-wp-enforced-sizes"></amp-iframe>',
+				'<amp-iframe src="https://example.com/embed/132886713" width="500" height="281" scrolling="auto" sandbox="allow-scripts allow-same-origin" layout="intrinsic" class="amp-wp-enforced-sizes"></amp-iframe>',
 			),
 
 			'iframe_with_sizes_attribute_is_overridden' => array(
 				'<iframe src="https://example.com/iframe" width="500" height="281"></iframe>',
 				'<amp-iframe src="https://example.com/iframe" width="500" height="281" sandbox="allow-scripts allow-same-origin" layout="intrinsic" class="amp-wp-enforced-sizes"></amp-iframe>',
+			),
+
+			'iframe_with_id_attribute'                  => array(
+				'<iframe src="https://example.com/iframe" id="myIframe"></iframe>',
+				'<amp-iframe src="https://example.com/iframe" id="myIframe" sandbox="allow-scripts allow-same-origin" height="400" layout="fixed-height"></amp-iframe>',
 			),
 
 			'iframe_with_protocol_relative_url' => array(
@@ -64,20 +69,20 @@ class AMP_Iframe_Converter_Test extends WP_UnitTestCase {
 			),
 
 			'multiple_same_iframe' => array(
-				'
+				trim( '
 <iframe src="https://example.com/embed/132886713" width="500" height="281"></iframe>
 <iframe src="https://example.com/embed/132886713" width="500" height="281"></iframe>
 <iframe src="https://example.com/embed/132886713" width="500" height="281"></iframe>
-				',
+				' ),
 				'<amp-iframe src="https://example.com/embed/132886713" width="500" height="281" sandbox="allow-scripts allow-same-origin" layout="intrinsic" class="amp-wp-enforced-sizes"></amp-iframe><amp-iframe src="https://example.com/embed/132886713" width="500" height="281" sandbox="allow-scripts allow-same-origin" layout="intrinsic" class="amp-wp-enforced-sizes"></amp-iframe><amp-iframe src="https://example.com/embed/132886713" width="500" height="281" sandbox="allow-scripts allow-same-origin" layout="intrinsic" class="amp-wp-enforced-sizes"></amp-iframe>',
 			),
 
 			'multiple_different_iframes' => array(
-				'
+				trim( '
 <iframe src="https://example.com/embed/12345" width="500" height="281"></iframe>
 <iframe src="https://example.com/embed/67890" width="280" height="501"></iframe>
 <iframe src="https://example.com/embed/11111" width="700" height="601"></iframe>
-				',
+				' ),
 				'<amp-iframe src="https://example.com/embed/12345" width="500" height="281" sandbox="allow-scripts allow-same-origin" layout="intrinsic" class="amp-wp-enforced-sizes"></amp-iframe><amp-iframe src="https://example.com/embed/67890" width="280" height="501" sandbox="allow-scripts allow-same-origin" layout="intrinsic" class="amp-wp-enforced-sizes"></amp-iframe><amp-iframe src="https://example.com/embed/11111" width="700" height="601" sandbox="allow-scripts allow-same-origin" layout="intrinsic" class="amp-wp-enforced-sizes"></amp-iframe>',
 			),
 			'iframe_in_p_tag' => array(
@@ -102,6 +107,10 @@ class AMP_Iframe_Converter_Test extends WP_UnitTestCase {
 		$dom = AMP_DOM_Utils::get_dom_from_content( $source );
 		$sanitizer = new AMP_Iframe_Sanitizer( $dom );
 		$sanitizer->sanitize();
+
+		$whitelist_sanitizer = new AMP_Tag_And_Attribute_Sanitizer( $dom );
+		$whitelist_sanitizer->sanitize();
+
 		$content = AMP_DOM_Utils::get_content_from_dom( $dom );
 		$content = preg_replace( '/(?<=>)\s+(?=<)/', '', $content );
 		$this->assertEquals( $expected, $content );
